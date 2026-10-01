@@ -58,6 +58,26 @@ body { font-size: 14px; }
 .metro-table td.strong { color: var(--text); font-weight: 600; }
 .metro-table td.dim { color: var(--muted); }
 
+/* ---- Table scroll (many columns) ---- */
+.table-scroll { overflow-x: auto; }
+
+/* ---- Column visibility dropdown ---- */
+.col-toggle { position: relative; }
+.col-toggle-btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer; }
+.col-toggle-btn:hover { border-color: var(--accent2); }
+.col-count { color: var(--accent); }
+.col-panel { position: absolute; z-index: 20; top: 100%; left: 0; margin-top: 6px; min-width: 230px; max-width: 340px; background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.45); padding: 10px; }
+.col-all { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 8px; cursor: pointer; }
+.col-list { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; max-height: 340px; overflow-y: auto; }
+.col-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.col-item:hover { color: var(--text); }
+.col-item input, .col-all input { accent-color: var(--accent); }
+
+/* ---- Mega-project cell ---- */
+.mega-cell { display: inline-flex; flex-direction: column; line-height: 1.2; }
+.mega-val { color: var(--accent); font-weight: 700; white-space: nowrap; }
+.mega-name { color: var(--muted); font-size: 10.5px; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ---- misc ---- */
 .empty { color: var(--muted); text-align: center; padding: 30px; }
 .footer { background: var(--bg); border-top: 1px solid var(--border); padding: 12px 28px; color: var(--muted); font-size: 12px; text-align: center; }
