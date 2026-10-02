@@ -28,6 +28,7 @@ const CRITERIA = [
   { key: 'internet',         label: 'Internet speed',                            def: 2,  metric: m => m.metricInternet },
   { key: 'rent_growth',      label: 'Rent-growth stability',                     def: 2,  metric: m => m.metricRentGrowth },
   { key: 'climate',          label: 'Climate/disaster exposure',                 def: 1,  metric: m => m.metricClimate },
+  { key: 'mega',             label: 'Mega-project $ (planned infra)',            def: 5,  metric: m => m.metricMega },
 ]
 
 const DEFAULTS = Object.fromEntries(CRITERIA.map(c => [c.key, c.def]))
@@ -77,6 +78,7 @@ function buildMetros() {
   const renters      = metros.map(m => m.renter_pct)
   const internets    = metros.map(m => m.internet_speed_mbps)
   const taxes        = metros.map(m => m.property_tax_rate_pct)
+  const megas        = metros.map(m => m.megaproject_usd_b ?? 0)
 
   const buyBelows   = metros.map(m => (finalByKey.get(`${m.city}|${m.state}`) || {}).buy_below)
   const unknowns    = metros.map(m => (finalByKey.get(`${m.city}|${m.state}`) || {}).unknown)
@@ -97,6 +99,7 @@ function buildMetros() {
     appr:        normalize(apprs),
     priceIncome: normalize(priceIncomes, true),
     rentGrowth:  normalize(rentGrowths),
+    mega:        normalize(megas),
   }
 
   return metros.map((m, i) => {
@@ -119,6 +122,7 @@ function buildMetros() {
       metricRentGrowth: N.rentGrowth[i],
       metricTax: N.tax[i],
       metricClimate: finalRow ? finalRow.clim : 0.5,
+      metricMega: N.mega[i],
       grossYield: grossYields[i],
       vacancyYield: vacancyYields[i],
       rentPrice: rentPrices[i],
@@ -133,7 +137,7 @@ function buildMetros() {
       dispInternet:  m.internet_speed_mbps ?? null,
       dispTax:       m.property_tax_rate_pct ?? (finalRow ? finalRow.tax : null),
       dispPir:       m.price_income_ratio ?? (finalRow ? finalRow.pir : null),
-      dispRentPrice: m.rent_to_price_ratio ?? null,
+      dispRentPrice: rentPrices[i],   // derived on-page: price / (monthly_rent * 12)
       dispUnknown:   m.unknownness ?? (finalRow ? finalRow.unknown : null),
       dispBuyBelow:  m.buy_below_market_pct ?? (finalRow ? finalRow.buy_below : null),
       dispDom:       m.days_on_market ?? (finalRow ? finalRow.dom : null),
@@ -300,6 +304,19 @@ function MetroTable({ metros, columns }) {
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
+// Aggregate list of all data sources used across the dataset (shown at footer).
+const SOURCES = [
+  'US Census Bureau — American Community Survey 5-yr 2020-2024: B25002 (total vacancy), B25003 (renter share, tagged per metro), B25004 (rental vacancy)',
+  'HUD Comprehensive Housing Market Analysis (CHMA) — rental-vacancy cross-check',
+  'Freddie Mac Primary Mortgage Market Survey (PMMS) — 30-yr rate for the BRRR refi',
+  'Zillow Home Value Index & Observed Rent Index — median price / median rent',
+  'Redfin & Realtor.com — days-on-market and gross-yield market data',
+  'Federal Reserve Economic Data (FRED) / Census — price-to-income, tenure',
+  'FCC National Broadband Map — internet speeds',
+  'NOAA / FEMA — climate & disaster exposure',
+  'Company/agency announcements (KY): U.S. DOE (Paducah American Energy Hub), Toyota TMMK, Ford Energy/Glendale, Canadian Solar e-STORAGE, Tate/Kingspan, Ascend Elements, KY data-center tracker — confirmed planned mega-project dollar values',
+]
+
 function App() {
   const [weights, setWeights] = useState({ ...DEFAULTS })
   const [stateFilter, setStateFilter] = useState('ALL')
@@ -366,7 +383,12 @@ function App() {
       </div>
 
       <footer className="footer">
-        Data snapshot 2026-10-01 · weighted composite (15 criteria) · BRRR underwrite at 75% LTV / 6.66% 30-yr · Mega Project $ = confirmed planned infrastructure (dollar value)
+        <div>
+          Data snapshot 2026-10-01 · {CRITERIA.length} weighted criteria (incl. Mega-project $) · BRRR underwrite 75% LTV / 6.66% 30-yr<br/>
+          Derived values are computed on-page from base data: Gross/Vacancy-adjusted yield = rent·12/price (×(1−vacancy)); Rent-to-price = price/(rent×12).
+        </div>
+        <div className="sources-label">Sources used in total:</div>
+        <ul className="sources">{SOURCES.map((s, i) => <li key={i}>{s}</li>)}</ul>
       </footer>
     </div>
   )
