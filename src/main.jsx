@@ -16,6 +16,7 @@ const CRITERIA = [
   { key: 'cash_flow',        label: 'Cash-flow ratio (net-per-door / 1% test)',  def: 18, metric: m => m.metricCashFlow },
   { key: 'landlord',         label: 'Landlord-friendly state',                   def: 13, metric: m => m.landlord_friendly },
   { key: 'vacancy_yield',    label: 'Vacancy-adjusted yield',                    def: 11, metric: m => m.metricVacancyYield },
+  { key: 'rental_vac',       label: 'Rental vacancy % (tight = good)',           def: 8,  metric: m => m.metricRentVac },
   { key: 'buy_below',        label: 'Buy-below-market room',                     def: 10, metric: m => m.metricBuyBelow },
   { key: 'unknown',          label: 'Unknown-ness score',                        def: 10, metric: m => m.metricUnknown },
   { key: 'rent_price',       label: 'Rent-to-price ratio',                       def: 8,  metric: m => m.metricRentPrice },
@@ -76,6 +77,7 @@ function buildMetros() {
   const rentPrices   = metros.map((_, i) => rent[i] && price[i] ? price[i]/(rent[i]*12) : null)
   const popGrowths   = metros.map(m => m.pop_growth_5yr_pct)
   const renters      = metros.map(m => m.renter_pct)
+  const rentVacs     = metros.map(m => m.vacancy_rate_pct)
   const internets    = metros.map(m => m.internet_speed_mbps)
   const taxes        = metros.map(m => m.property_tax_rate_pct)
   const megas        = metros.map(m => m.megaproject_usd_b ?? 0)
@@ -92,6 +94,7 @@ function buildMetros() {
     rentPrice:   normalize(rentPrices, true),
     popGrowth:   normalize(popGrowths),
     renter:      normalize(renters),
+    rentVac:     normalize(rentVacs, true),   // invert: LOW rental vacancy = tight demand = good
     internet:    normalize(internets),
     tax:         normalize(taxes, true),
     buyBelow:    normalize(buyBelows),
@@ -118,6 +121,7 @@ function buildMetros() {
       metricPriceIncome: N.priceIncome[i],
       metricEmp: finalRow ? finalRow.emp : 0.5,
       metricRenter: N.renter[i],
+      metricRentVac: N.rentVac[i],
       metricInternet: N.internet[i],
       metricRentGrowth: N.rentGrowth[i],
       metricTax: N.tax[i],
@@ -162,6 +166,48 @@ function scoreMetro(metro, weights) {
 
 function computeScores(weights) {
   return METROS.map(m => ({ ...m, composite: scoreMetro(m, weights) }))
+}
+
+// ---------------------------------------------------------------------------
+// Column sort: a raw numeric accessor per column key. Clicking a numeric
+// header's arrows sorts the whole table by that column (nulls last).
+// ---------------------------------------------------------------------------
+const SORT_VAL = {
+  price: m => m.median_home_price,
+  rent: m => m.median_monthly_rent,
+  gross: m => m.grossYield,
+  vac_yield: m => m.vacancyYield,
+  net: m => m.brrrNetMonthly,
+  rental_vac: m => m.dispRentalVac,
+  total_vac: m => m.dispTotalVac,
+  renter: m => m.dispRenter,
+  pop: m => m.dispPop,
+  landlord: m => m.dispLandlord,
+  internet: m => m.dispInternet,
+  tax: m => m.dispTax,
+  pir: m => m.dispPir,
+  rent_price: m => m.dispRentPrice,
+  unknown: m => m.dispUnknown,
+  buy_below: m => m.dispBuyBelow,
+  dom: m => m.dispDom,
+  appr5: m => m.dispAppr5,
+  emp: m => m.dispEmp,
+  climate: m => m.dispClim,
+  mega: m => m.dispMegaUsdB,
+  score: m => m.composite,
+}
+
+function sortRows(rows, key, dir) {
+  const get = SORT_VAL[key]
+  if (!get) return rows
+  return [...rows].sort((a, b) => {
+    const va = get(a), vb = get(b)
+    const an = va == null || Number.isNaN(va), bn = vb == null || Number.isNaN(vb)
+    if (an && bn) return 0
+    if (an) return 1       // nulls always last
+    if (bn) return -1
+    return dir * (va - vb)
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -280,13 +326,25 @@ function ColumnToggle({ visible, toggleColumn, setAll }) {
   )
 }
 
-function MetroTable({ metros, columns }) {
+function MetroTable({ metros, columns, sortKey, sortDir, onSort }) {
   return (
     <div className="table-scroll">
       <table className="metro-table">
         <thead>
           <tr>
-            {columns.map(c => <th key={c.key} className={c.num ? 'num' : ''}>{c.header}</th>)}
+            {columns.map(c => {
+              const sortable = !!SORT_VAL[c.key]
+              const active = sortKey === c.key
+              return (
+                <th key={c.key}
+                    className={(c.num ? 'num ' : '') + (sortable ? 'sortable' : '') + (active ? ' active' : '')}
+                    onClick={sortable ? () => onSort(c.key) : undefined}
+                    title={sortable ? 'Sort by ' + c.header : undefined}>
+                  <span className="th-label">{c.header}</span>
+                  {sortable && <span className="sort-arrows">{active ? (sortDir === 1 ? '▲' : '▼') : '↕'}</span>}
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody>
@@ -323,6 +381,7 @@ function App() {
   const [metroFilter, setMetroFilter] = useState('')
   const [limit, setLimit] = useState(50)
   const [visible, setVisible] = useState([...TOGGLE_KEYS])
+  const [sort, setSort] = useState({ key: null, dir: 1 })
 
   const scored = computeScores(weights)
   scored.sort((a, b) => b.composite - a.composite)
@@ -334,11 +393,17 @@ function App() {
     const finalKeys = new Set(finalData.map(r => `${r.city}|${r.state}`))
     view = view.filter(m => finalKeys.has(`${m.city}|${m.state}`))
   }
+  if (sort.key) view = sortRows(view, sort.key, sort.dir)
   view = view.slice(0, limit)
 
   const onWeight = (k, v) => setWeights(prev => ({ ...prev, [k]: v }))
   const toggleColumn = k => setVisible(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])
   const setAll = checked => setVisible(checked ? [...TOGGLE_KEYS] : [])
+  const onSort = key => setSort(prev => {
+    if (prev.key !== key) return { key, dir: 1 }      // first click: ascending
+    if (prev.dir === 1) return { key, dir: -1 }        // second: descending
+    return { key: null, dir: 1 }                        // third: clear (back to weighted composite)
+  })
   const columns = COLUMNS.filter(c => c.fixed || visible.includes(c.key))
 
   return (
@@ -376,7 +441,7 @@ function App() {
             <span className="count">{view.length} shown</span>
           </div>
 
-          <MetroTable metros={view} columns={columns} />
+          <MetroTable metros={view} columns={columns} sortKey={sort.key} sortDir={sort.dir} onSort={onSort} />
 
           {view.length === 0 && <p className="empty">No metros match the current filters.</p>}
         </main>

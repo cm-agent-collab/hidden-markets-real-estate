@@ -90,3 +90,9 @@ body { font-size: 14px; }
   .layout { flex-direction: column; }
   .weights { position: static; width: 100%; height: auto; }
 }
+/* ---- column sort arrows ---- */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--accent); }
+th.active { color: var(--accent); font-weight: 700; }
+.sort-arrows { margin-left: 4px; font-size: 11px; opacity: .65; }
+th.active .sort-arrows { opacity: 1; }
